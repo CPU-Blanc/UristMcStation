@@ -22,7 +22,7 @@
 
 	var/turf/safespace = get_turf(src)
 	if(safespace)
-		owner.brain.SetMemory(MEM_SAFESPACE, safespace, src.GetOwnerAiTickrate(owner) * 100)
+		owner.brain.SetMemory(MEM_SAFESPACE, weakref(safespace), src.GetOwnerAiTickrate(owner) * 100)
 
 	return
 

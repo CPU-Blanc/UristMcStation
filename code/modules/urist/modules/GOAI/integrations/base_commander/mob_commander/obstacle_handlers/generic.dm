@@ -1,39 +1,27 @@
-/datum/goai/mob_commander/proc/HandlePry(var/datum/ActionTracker/tracker, var/obj/target)
-	log_debug("Pry task for [target]")
-	if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == target)
-		src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
-	tracker.SetDone()
-	return
-	//TODO
-
-/datum/goai/mob_commander/proc/HandleScrew(var/datum/ActionTracker/tracker, var/obj/target)
-	log_debug("Screw task for [target]")
-	tracker.SetDone()
-	return
-	//TODO
-
 /datum/goai/mob_commander/proc/HandleGenericBreak(var/datum/ActionTracker/tracker, var/obj/target, var/method)
-	log_debug("Break task for [target]")
-	var/mob/pawn = src.GetPawn()
-	if(!pawn || !istype(pawn))
+	var/mob/mob_pawn = src.GetPawn()
+	if(!mob_pawn || !istype(mob_pawn))
 		return
 
 	if(!tracker)
 		return
 
-	if(tracker.IsOlderThan(src.ai_tick_delay * 10))
+	target = resolve_weakref(target)
+
+	if(TimedOutWalkDist(tracker, mob_pawn, target, (DEFAULT_ATTACK_COOLDOWN * 15)))
 		tracker.SetFailed()
-		if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == target)	//This should really be its own proc...
-			src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+		DropObstacleMemory(target)
+		OBSTACLE_DEBUG_LOG("Tracker timed-out for [target] [COORDS_TUPLE(target)] generic break task")
 		return
 
 	var/obj/machinery/M = target
 
-	if(isnull(target) || (istype(M) && (M.stat & BROKEN)))
-		if(!isnull(target))
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == target)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+	if(isnull(target))
 		tracker.SetDone()
+		return
+	else if(istype(M) && M in src.brain.perceptions[SENSE_SIGHT_CURR] && (M.stat & BROKEN))
+		tracker.SetDone()
+		DropObstacleMemory(M)
 		return
 
 	//Cooldown check
@@ -42,8 +30,8 @@
 		return
 
 	//See what's in the mob's hands
-	var/obj/item/AH = pawn.get_active_hand()
-	var/obj/item/IH = pawn.get_inactive_hand()
+	var/obj/item/AH = mob_pawn.get_active_hand()
+	var/obj/item/IH = mob_pawn.get_inactive_hand()
 	var/obj/item/W = null
 
 	//Select whatever actually is a weapon, and attack with that
@@ -52,9 +40,44 @@
 	else if(IH && !istool(IH) && !(IH.item_flags & ITEM_FLAG_NO_BLUDGEON))
 		W = IH
 	else
+		OBSTACLE_DEBUG_LOG("No available weapon for [target] [COORDS_TUPLE(target)] generic break task")
 		tracker.SetFailed()
-		if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == target)
-			src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+		DropObstacleMemory(target)
 
-	target.attackby(W, pawn)
+	target.attackby(W, mob_pawn)
 	tracker.BBSet("LastAttack", world.time)
+
+/datum/goai/mob_commander/proc/HandleGenericClimb(var/datum/ActionTracker/tracker, var/obj/target)
+	var/mob/living/mob_pawn = src.GetPawn()
+	if(!mob_pawn || !istype(mob_pawn))
+		tracker.SetFailed()
+		return
+
+	target = resolve_weakref(target)
+
+	if(isnull(target))
+		tracker.SetDone()
+		return
+	else if(!istype(target))
+		tracker.SetFailed()
+		return
+
+	if(TimedOutWalkDist(tracker, mob_pawn, target, (MOB_CLIMB_TIME_MEDIUM + 10)))
+		tracker.SetFailed()
+		DropObstacleMemory(target)
+		OBSTACLE_DEBUG_LOG("Tracker timed-out for [target] [COORDS_TUPLE(target)] generic climb task")
+		return
+
+	if(!NavigateNextTo(tracker, mob_pawn, target))
+		return
+
+	if(tracker.BBGet("InProgress", FALSE))
+		return
+
+	tracker.BBSet("InProgress", TRUE)
+
+	if(target.do_climb(mob_pawn))
+		tracker.SetDone()
+	else
+		tracker.SetFailed()
+		OBSTACLE_DEBUG_LOG("Failed do_climb proc for [target] [COORDS_TUPLE(target)]")

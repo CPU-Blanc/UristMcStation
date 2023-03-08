@@ -10,7 +10,7 @@
 		return
 
 	// Pathfinding/search
-	var/turf/best_local_pos = brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null)
+	var/turf/best_local_pos = resolve_weakref(brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null))
 	if(best_local_pos)
 		return best_local_pos
 
@@ -36,7 +36,7 @@
 		curr_view.Add(safespace_loc)
 	*/
 
-	var/turf/unreachable = brain?.GetMemoryValue("UnreachableTile", null)
+	var/turf/unreachable = resolve_weakref(brain?.GetMemoryValue("UnreachableTile", null))
 	var/datum/chunkserver/chunkserver = GetOrSetChunkserver()
 
 	var/my_loc = get_turf(pawn)
@@ -106,7 +106,7 @@
 		var/atom/obstruction = explicit_obstruction
 
 		if(isnull(obstruction) || !(istype(obstruction)))
-			obstruction = brain.GetMemoryValue(MEM_OBSTRUCTION("PANIC"))
+			obstruction = resolve_weakref(brain.GetMemoryValue(MEM_OBSTRUCTION("PANIC")))
 
 		var/handled = isnull(obstruction) // if obs is null, counts as handled
 
@@ -135,7 +135,7 @@
 			ACTION_RUNTIME_DEBUG_LOG("Couldn't handle obstruction [obstruction]")
 
 	if(best_local_pos)
-		brain?.SetMemory(MEM_BESTPOS_PANIC, best_local_pos, PANIC_SENSE_THROTTLE*30)
+		brain?.SetMemory(MEM_BESTPOS_PANIC, weakref(best_local_pos), PANIC_SENSE_THROTTLE*30)
 
 	return best_local_pos
 
@@ -180,7 +180,7 @@
 		ACTION_RUNTIME_DEBUG_LOG("[src] does not have an owned mob!")
 		return
 
-	var/turf/best_local_pos = brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null)
+	var/turf/best_local_pos = resolve_weakref(brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null))
 	best_local_pos = best_local_pos || tracker?.BBGet(MEM_BESTPOS_PANIC, null)
 
 	if(best_local_pos)
@@ -222,7 +222,7 @@
 		tracker?.BBSet(MEM_BESTPOS_PANIC, best_local_pos)
 		tracker?.SetDone()
 
-		brain?.SetMemory(MEM_BESTPOS_PANIC, best_local_pos)
+		brain?.SetMemory(MEM_BESTPOS_PANIC, weakref(best_local_pos))
 
 	else if(src.active_path && tracker?.IsOlderThan(COMBATAI_MOVE_TICK_DELAY * 5))
 		tracker?.SetFailed()
@@ -290,7 +290,7 @@
 	_best_local_pos = _best_local_pos || tracker?.BBGet(MEM_BESTPOS_PANIC, null)
 
 	if(isnull(_best_local_pos))
-		_best_local_pos = brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null)
+		_best_local_pos = resolve_weakref(brain?.GetMemoryValue(MEM_BESTPOS_PANIC, null))
 
 	var/min_safe_dist = (brain?.GetPersonalityTrait(KEY_PERS_MINSAFEDIST) || 2)
 	var/frustration_repath_maxthresh = brain.GetPersonalityTrait(KEY_PERS_FRUSTRATION_THRESH, null) || 3
@@ -364,7 +364,7 @@
 	if(isnull(_best_local_pos))
 		_best_local_pos = ChoosePanicRunLandmark(primary_threat, threats, min_safe_dist, obstruction)
 		tracker.BBSet(MEM_BESTPOS_PANIC, _best_local_pos)
-		brain?.SetMemory(MEM_BESTPOS_PANIC, _best_local_pos, PANIC_SENSE_THROTTLE*3)
+		brain?.SetMemory(MEM_BESTPOS_PANIC, weakref(_best_local_pos), PANIC_SENSE_THROTTLE*3)
 		ACTION_RUNTIME_DEBUG_LOG((isnull(_best_local_pos) ? "[src]: Best local pos: null" : "[src]: Best local pos ([_best_local_pos?.x], [_best_local_pos?.y])"))
 
 	if(_best_local_pos && (!src.active_path || src.active_path.target != _best_local_pos))
@@ -393,7 +393,7 @@
 
 
 	else if(src.active_path && tracker.IsOlderThan(COMBATAI_MOVE_TICK_DELAY * 20))
-		brain?.SetMemory("UnreachableTile", src.active_path.target, MEM_TIME_LONGTERM)
+		brain?.SetMemory("UnreachableTile", weakref(src.active_path.target), MEM_TIME_LONGTERM)
 		walk_away(src, primary_threat || secondary_threat || get_turf(pawn))
 		tracker.SetFailed()
 

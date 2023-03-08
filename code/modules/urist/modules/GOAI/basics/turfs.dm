@@ -157,6 +157,10 @@
 			if(D && istype(D))
 				continue
 
+			var/obj/structure/table/T = object
+			if(T && istype(T))
+				continue
+
 			# endif
 
 			# ifdef GOAI_LIBRARY_FEATURES

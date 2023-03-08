@@ -59,18 +59,18 @@
 	var/list/curr_view = brain?.perceptions?.Get(SENSE_SIGHT_CURR)
 	curr_view.Add(_startpos)
 
-	var/turf/safespace_loc = brain?.GetMemoryValue(MEM_SAFESPACE, null)
+	var/turf/safespace_loc = resolve_weakref(brain?.GetMemoryValue(MEM_SAFESPACE, null))
 	if(safespace_loc)
 		curr_view.Add(safespace_loc)
 
-	var/turf/hysteresis_bestpos = brain.GetMemoryValue("LastBestPos", null)
+	var/turf/hysteresis_bestpos = resolve_weakref(brain.GetMemoryValue("LastBestPos", null))
 
 	var/effective_waypoint_x = null
 	var/effective_waypoint_y = null
 
 	var/mob/pawn_mob = pawn
 
-	var/atom/waypoint_ident = brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+	var/atom/waypoint_ident = resolve_weakref(brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 	var/datum/chunk/waypointchunk = null
 
 	if(waypoint_ident)
@@ -119,7 +119,7 @@
 
 		waypointchunk = chunkserver.ChunkForTile(effective_waypoint_x, effective_waypoint_y, pawn.z)
 
-	var/turf/unreachable = brain?.GetMemoryValue("UnreachableTile", null)
+	var/turf/unreachable = resolve_weakref(brain?.GetMemoryValue("UnreachableTile", null))
 
 	for(var/atom/candidate_cover in curr_view)
 		// Need to aggressively trim down processed types here or this will take forever in object-dense areas
@@ -329,7 +329,7 @@
 					if(potential_obstruction_curr == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_curr?.directional_blocker
+					var/datum/directional_blocker/blocker = potential_obstruction_curr.GetBlockerData(TRUE)
 					if(!blocker)
 						continue
 
@@ -345,7 +345,7 @@
 					if(potential_obstruction_prev == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_prev?.directional_blocker
+					var/datum/directional_blocker/blocker = potential_obstruction_prev.GetBlockerData(TRUE)
 					if(!blocker)
 						continue
 
@@ -398,7 +398,7 @@
 
 	var/list/threats = new()
 	var/min_safe_dist = owner_brain.GetPersonalityTrait(KEY_PERS_MINSAFEDIST, 2)
-	var/turf/prev_loc_memdata = owner_brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE)
+	var/turf/prev_loc_memdata = resolve_weakref(owner_brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE))
 
 	// Main threat:
 	var/dict/primary_threat_ghost = owner.GetActiveThreatDict()
@@ -444,7 +444,7 @@
 	if(best_pos_path && best_pos_path.len)
 		best_pos = best_pos_path[best_pos_path.len]
 
-	owner_brain.SetMemory("LastBestPos", best_pos, 3000)
+	owner_brain.SetMemory("LastBestPos", weakref(best_pos), 3000)
 
 	// Check the raw path for the first obstacle and return it if it exists
 	var/datum/Tuple/obs_tuple = src.CheckForObstacles(owner, best_pos_path)

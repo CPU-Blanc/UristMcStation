@@ -24,7 +24,7 @@
 
 	var/mob/pawn_mob = pawn
 
-	var/atom/waypoint_ident = brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+	var/atom/waypoint_ident = resolve_weakref(brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 	//var/datum/chunk/waypointchunk = null
 
 	if(waypoint_ident)
@@ -184,7 +184,7 @@
 		tracker.SetDone()
 
 		if(brain)
-			brain.SetMemory(MEM_CHARGE_BESTPOS, best_local_pos)
+			brain.SetMemory(MEM_CHARGE_BESTPOS, weakref(best_local_pos))
 
 	else
 		tracker.SetFailed()
@@ -248,7 +248,7 @@
 	if(tracker.IsTriggered() && !tracker.is_done)
 		if(tracker.TriggeredMoreThan(1))
 			tracker.SetDone()
-			brain?.SetMemory(MEM_PREVLOC, startpos, MEM_TIME_LONGTERM)
+			brain?.SetMemory(MEM_PREVLOC, weakref(startpos), MEM_TIME_LONGTERM)
 
 	else if(src.active_path && tracker.IsOlderThan(COMBATAI_MOVE_TICK_DELAY * (20 + walk_dist)))
 		if(needybrain)

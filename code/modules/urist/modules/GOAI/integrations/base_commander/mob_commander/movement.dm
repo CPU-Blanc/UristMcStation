@@ -126,7 +126,7 @@
 					if(potential_obstruction_curr == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_curr?.directional_blocker
+					var/datum/directional_blocker/blocker = potential_obstruction_curr.GetBlockerData(TRUE)
 					if(!blocker)
 						continue
 
@@ -142,7 +142,7 @@
 					if(potential_obstruction_prev == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_prev?.directional_blocker
+					var/datum/directional_blocker/blocker = potential_obstruction_prev.GetBlockerData(TRUE)
 					if(!blocker)
 						continue
 
@@ -203,12 +203,12 @@
 	var/atom/pawn = src.GetPawn()
 
 	if(brain && refresh_loc_memories)
-		var/atom/previous_oldloc = brain.GetMemoryValue("Location-1")
+		var/atom/previous_oldloc = resolve_weakref(brain.GetMemoryValue("Location-1"))
 
 		if(previous_oldloc && prob(10))
-			brain.SetMemory("Location-2", previous_oldloc)
+			brain.SetMemory("Location-2", weakref(previous_oldloc))
 
-		brain.SetMemory("Location-1", pawn?.loc)
+		brain.SetMemory("Location-1", weakref(pawn?.loc))
 
 	var/datum/ActivePathTracker/pathtracker = BuildPathTrackerTo(trg, min_dist, avoid, inh_frustration, costproc)
 

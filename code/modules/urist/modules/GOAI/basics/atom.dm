@@ -10,6 +10,8 @@
 	// eventually might be redone as a big array/SparseSet with implicit IDs, ECS-style
 	var/dict/attachments
 
+	var/datum/interactions_holder/interactions_holder = null
+	var/interaction_gen_enabled = FALSE
 
 /atom/proc/Hit(var/hit_angle, var/atom/shotby = null)
 	/* hit angle - clockwise from positive Y axis if positive,

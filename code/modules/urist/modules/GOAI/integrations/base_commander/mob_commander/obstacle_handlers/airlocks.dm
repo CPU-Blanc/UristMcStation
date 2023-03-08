@@ -1,28 +1,36 @@
 //Returns action_key if handled and adds the appropriate actions
-/datum/goai/mob_commander/proc/HandleAirlockObstruction(var/obj/machinery/door/airlock/A ,var/list/common_preconds = null, var/waypoint, var/atom/pawn, var/list/common_effects = null)
-	if(!A || !waypoint || !pawn || !istype(A))
+/datum/goai/mob_commander/proc/HandleAirlockObstruction(var/obj/machinery/door/airlock/A ,var/list/common_preconds = null, var/atom/pawn, var/list/handled_effects = null)
+	if(!A || !pawn || !istype(A))
+		return null
+
+	if(!GOAI_CAN_TRAVERSE(A, pawn))
+		OBSTACLE_DEBUG_LOG("[pawn] cannot traverse [A] [COORDS_TUPLE(A)]. Aborting.")
 		return null
 
 	var/action_key = null
 
 	var/list/_common_preconds = (isnull(common_preconds) ? list() : common_preconds)
-	var/list/open_door_preconds = _common_preconds.Copy()	//Any extra preconds are added here, and then passed back to the final appropriate open action
+	var/list/open_door_preconds = _common_preconds.Copy()		//Any extra preconds are added here, and then passed back to the final appropriate open action
 	var/list/base_preconds = _common_preconds.Copy()			//Preconditions that must be met for *all* future actions. ie, insulated gloves for shocked airlocks
 
-	var/list/_common_effects = (isnull(common_effects) ? list() : common_effects)
+	var/list/_handled_effects = (isnull(handled_effects) ? list() : handled_effects)
 
-	var/hack_handled = FALSE
+	var/needs_hack = FALSE
 
 	//Get various airlock states from the brain's memories
-	var/no_power = src.brain.GetMemoryValue(MEM_OBJ_NOPOWER(A), null)
-	var/is_bolted = src.brain.GetMemoryValue(MEM_OBJ_LOCKED(A), null)
-	var/panel_open = src.brain.GetMemoryValue(MEM_OBJ_PANELOPEN(A), null)
+	var/no_power = src.brain.GetMemoryValue(MEM_OBJ_NOPOWER(A), FALSE)
+	var/is_bolted = src.brain.GetMemoryValue(MEM_OBJ_LOCKED(A), FALSE)
+	var/panel_open = src.brain.GetMemoryValue(MEM_OBJ_PANELOPEN(A), FALSE)
+	var/no_access = src.brain.GetMemoryValue(MEM_OBJ_NOACCESS(A), FALSE)
 
-	if(src.brain.GetMemoryValue(MEM_OBJ_NOACCESS(A), null))	//Todo: Handle gaining access (find ID?)
+	//We're going to be doing multiple interaction checks here. It makes sense to grab the holder and use that, rather than constantly querying through the atom
+	var/datum/interactions_holder/iholder = A.GetInteractionData(TRUE)
+	if(!iholder)
+		OBSTACLE_DEBUG_LOG("Could not find an interactions_holder for [A]")
 		return null
 
 	//*All* future interactions with this airlock will require gloves
-	if(src.brain.GetMemoryValue(MEM_OBJ_SHOCKED(A), null))
+	if(src.brain.GetMemoryValue(MEM_OBJ_SHOCKED(A), FALSE))
 		base_preconds[STATE_HASINSULGLOVES] = TRUE
 		open_door_preconds[STATE_HASINSULGLOVES] = TRUE
 
@@ -31,260 +39,565 @@
 
 	if(is_bolted)
 		if(no_power)	//Bolted with no power. Just give up
+			OBSTACLE_DEBUG_LOG("[A] is bolted with no power. Aborting")
 			return null
 
-		action_key = "[NEED_OBJ_UNLOCKED(A)] for [waypoint]"
+		action_key = "[NEED_OBJ_UNLOCKED(A)]"
 
 		var/list/extra_preconds = base_preconds.Copy()
 
 		open_door_preconds[action_key] = TRUE	//Extra action key added to base open action
-		//src.SetState(action_key, FALSE)	//Workaround
 
-		extra_preconds[action_key] = -TRUE
-		extra_preconds[STATE_HASCROWBAR] = TRUE
-		extra_preconds[STATE_HASMULTITOOL] = TRUE
+		extra_preconds[action_key] = FALSE
 
-		if(!panel_open)
-			extra_preconds[STATE_HASSCREWDRIVER] = TRUE
+		var/datum/interaction/bolt_action = iholder.GetAction(pawn, list(ACT_AI_INTERACT, ACT_UNBOLT))
+		//We have the ability to send an unbolt command to the airlock. No need to hack!
+		if(bolt_action)
+			OBSTACLE_DEBUG_LOG("[pawn] has ACT_AI_INTERACT. Queing AI unbolt command")
+			var/list/effects = list()
+			effects[action_key] = TRUE
 
-		var/list/effects = _common_effects.Copy()
+			var/list/action_args = list()
+			action_args["airlock"] = weakref(A)
+			action_args["task"] = "bolt"
+			action_args["active"] = FALSE
+
+			AddAction(
+				name = action_key,
+				preconds = extra_preconds,
+				effects = effects,
+				handler = bolt_action.action_path,
+				cost = bolt_action.base_cost,
+				charges = bolt_action.base_charges,
+				instant = FALSE,
+				action_args = action_args
+			)
+
+		else
+			var/datum/interaction/hack_action = iholder.GetAction(pawn, list(ACT_HACK, ACT_UNBOLT))
+			if(!hack_action)
+				OBSTACLE_DEBUG_LOG("[pawn] has no hack & unbolt action for [A]. Aborting.")
+				return null
+
+			//extra_preconds[STATE_HASMULTITOOL] = TRUE	//For debugging
+
+			if(!panel_open)
+				var/datum/interaction/screw_action = iholder.GetAction(pawn, ACT_SCREW)
+				if(!screw_action)
+					OBSTACLE_DEBUG_LOG("[pawn] has no screw action for [A]. Aborting.")
+					return null
+
+				var/panel_key = "[NEED_OBJ_SCREW(A)]"
+
+				extra_preconds[panel_key] = TRUE
+
+				AddAction(
+					name = panel_key,
+					preconds = list(
+						"[panel_key]" = FALSE,
+						//"[STATE_HASSCREWDRIVER]" = TRUE,	//Debug
+						"[STATE_NEAR_ATOM(A)]" = TRUE
+						),
+					effects = list("[panel_key]" = TRUE),
+					handler = screw_action.action_path,
+					cost = screw_action.base_cost,
+					charges = screw_action.base_charges,
+					instant = FALSE,
+					action_args = list("airlock" = weakref(A), "open" = TRUE)
+				)
+
+			OBSTACLE_DEBUG_LOG("[pawn] queued unbolt action(s) for [A]")
+
+			var/list/effects = list()
+			effects[action_key] = TRUE
+
+			var/list/action_args = list()
+			action_args["airlock"] = weakref(A)
+			action_args["wires"] = list(AIRLOCK_WIRE_DOOR_BOLTS)
+			action_args["cut"] = FALSE
+
+			AddAction(
+				name = action_key,
+				preconds = extra_preconds,
+				effects = effects,
+				handler = hack_action.action_path,
+				cost = hack_action.base_cost,
+				charges = hack_action.base_charges,
+				instant = FALSE,
+				action_args = action_args
+			)
+
+			needs_hack = TRUE
+
+	if(no_access && !no_power)
+		var/datum/interaction/hack_action = iholder.GetAction(pawn, list(ACT_HACK, ACT_DEPOWER))
+		if(!hack_action)
+			OBSTACLE_DEBUG_LOG("[pawn] has no hack action for [A]. Aborting")
+			return null
+
+		if(!iholder.GetAction(pawn, list(ACT_PRY, ACT_TRAVERSE)))
+			OBSTACLE_DEBUG_LOG("[pawn] has no pry action for [A] - It cannot hack. Aborting.")
+			return null
+
+		action_key = "[NEED_OBJ_DEPOWERED(A)]"
+
+		var/list/extra_preconds = base_preconds.Copy()
+		open_door_preconds[action_key] = TRUE	//Extra action key added to base open action
+
+		extra_preconds[action_key] = FALSE
+
+		var/list/effects = list()
 		effects[action_key] = TRUE
 
+		if(is_bolted)	//If it's bolted AND no access, we MUST unbolt the airlock first BEFORE cutting power
+			extra_preconds["[NEED_OBJ_UNLOCKED(A)]"] = TRUE
+		else if(!panel_open)	//else if, as if it's bolted, that action would already leave the panel open for us
+			var/datum/interaction/screw_action = iholder.GetAction(pawn, ACT_SCREW)
+			if(!screw_action)
+				OBSTACLE_DEBUG_LOG("[pawn] has no screw action for [A]. Aborting.")
+				return null
+
+			var/panel_key = "[NEED_OBJ_SCREW(A)]"
+
+			extra_preconds[panel_key] = TRUE
+
+			AddAction(
+				name = panel_key,
+				preconds = list(
+					"[panel_key]" = FALSE,
+					//"[STATE_HASSCREWDRIVER]" = TRUE,	//Debug
+					"[STATE_NEAR_ATOM(A)]" = TRUE
+					),
+				effects = list("[panel_key]" = TRUE),
+				handler = screw_action.action_path,
+				cost = screw_action.base_cost,
+				charges = screw_action.base_charges,
+				instant = FALSE,
+				action_args = list("airlock" = weakref(A), "open" = TRUE)
+			)
+
 		var/list/action_args = list()
-		action_args["airlock"] = A
-		action_args["wires"] = list(AIRLOCK_WIRE_DOOR_BOLTS)
+
+		action_args["airlock"] = weakref(A)
+		action_args["wires"] = list(AIRLOCK_WIRE_MAIN_POWER1)
 		action_args["cut"] = FALSE
 
 		AddAction(
-			action_key,
-			extra_preconds,
-			effects,
-			/datum/goai/mob_commander/proc/HandleAirlockHack,
-			200,
-			1,
-			FALSE,
-			action_args
+			name = action_key,
+			preconds = extra_preconds,
+			effects = effects,
+			handler = hack_action.action_path,
+			cost = hack_action.base_cost,
+			charges = hack_action.base_charges,
+			instant = FALSE,
+			action_args = action_args
 		)
 
-		hack_handled = TRUE
+		no_power = TRUE	//Now plan as if the airlock is unpowered
+		needs_hack = TRUE
 
-	else if(panel_open && !no_power)	//AttackHand/Bump doesn't not work if the panel is open. Close it first if we're not hacking the airlock and it has power
-		action_key= "[NEED_OBJ_SCREW(A)] for [waypoint]"
+	if(panel_open && !no_power && !needs_hack)	//AttackHand/Bump doesn't not work if the panel is open. Close it first if we're not hacking the airlock and it has power
+		var/datum/interaction/screw_action = iholder.GetAction(pawn, ACT_SCREW)
+		if(!screw_action)
+			OBSTACLE_DEBUG_LOG("[pawn] has no pry action for [A]. Aborting")
+			return null
+
+		action_key= "[NEED_OBJ_SCREW(A)]"
 
 		var/list/extra_preconds = base_preconds.Copy()
 
 		open_door_preconds[action_key] = TRUE
-		//src.SetState(action_key, FALSE)	//Workaround
 
 		extra_preconds[action_key] = FALSE
-		extra_preconds[STATE_HASSCREWDRIVER] = TRUE
+		//extra_preconds[STATE_HASSCREWDRIVER] = TRUE	//Debug
 
-		var/list/effects = _common_effects.Copy()
+		var/list/effects = list()
 
 		effects[action_key] = TRUE
 
 		var/list/action_args = list()
-		action_args["target"] = A
+		action_args["airlock"] = weakref(A)
+		action_args["open"] = FALSE
 
 		AddAction(
-			action_key,
-			extra_preconds,
-			effects,
-			/datum/goai/mob_commander/proc/HandleScrew,
-			5,
-			1,
-			FALSE,
-			action_args
+			name = action_key,
+			preconds = extra_preconds,
+			effects = effects,
+			handler = screw_action.action_path,
+			cost = screw_action.base_cost,
+			charges = screw_action.base_charges,
+			instant = FALSE,
+			action_args = action_args
 		)
 
 	//---- Opening methods: Pick one ----//
 
-	if(no_power || hack_handled)
-		action_key = "[NEED_OBJ_PRY(A)] for [waypoint]"
+	if(no_power)
+		var/datum/interaction/pry_action = iholder.GetAction(pawn, list(ACT_PRY, ACT_TRAVERSE))
+		if(!pry_action)
+			OBSTACLE_DEBUG_LOG("[pawn] has no pry action for [A]. Aborting")
+			return null
+
+		action_key = "[NEED_OBJ_PRY(A)]"
 
 		open_door_preconds[action_key] = FALSE
-		open_door_preconds[STATE_HASCROWBAR] = TRUE
-		//src.SetState(action_key, FALSE)	//Workaround
+		//open_door_preconds[STATE_HASCROWBAR] = TRUE	//Debug
 
-		var/list/effects = _common_effects.Copy()
+		var/list/effects = _handled_effects.Copy()
 		effects[action_key] = TRUE
 
 		var/list/action_args = list()
-		action_args["target"] = A
+		action_args["airlock"] = weakref(A)
+		action_args["open"] = TRUE
 
 		AddAction(
-			action_key,
-			open_door_preconds,
-			effects,
-			/datum/goai/mob_commander/proc/HandlePry,
-			25 + rand() - (pawn ? get_dist(A, pawn) : 0),
-			1,
-			FALSE,
-			action_args
+			name = action_key,
+			preconds = open_door_preconds,
+			effects = effects,
+			handler = pry_action.action_path,
+			cost = pry_action.base_cost + DISTANCE_COST_ADJUSTMENT(pawn, A),
+			charges = pry_action.base_charges,
+			instant = FALSE,
+			action_args = action_args
 		)
 	//Prying unpowered airlocks is an /alternative/ way of opening them, not a prerequisite step. We need an else here
 	else
-		action_key = "Open Obstacle"
+		if(no_access && !needs_hack)
+			OBSTACLE_DEBUG_LOG("[A] could not be hacked by [pawn]. Aborting")
+			return null
 
+		var/datum/interaction/action = iholder.GetAction(pawn, ACT_OPEN)
+		if(!action)
+			OBSTACLE_DEBUG_LOG("[pawn] has no open action for [A]. Aborting")
+			return null
+
+		action_key = "[NEED_OBSTACLE_OPEN(A)]"
 		open_door_preconds[action_key] = FALSE
-		//src.SetState(action_key, FALSE)	//Workaround
 
-		var/list/open_door_effects = _common_effects.Copy()
+		var/list/open_door_effects = _handled_effects.Copy()
 		open_door_effects[action_key] = TRUE
 
 		var/list/action_args = list()
-		action_args["obstruction"] = A
+		action_args["airlock"] = weakref(A)
 
 		AddAction(
-			action_key,
-			open_door_preconds,
-			open_door_effects,
-			/datum/goai/mob_commander/proc/HandleAirlockOpen,
-			5 + rand() - (pawn ? get_dist(A, pawn) * 3 : 0),
-			1,
-			FALSE,
-			action_args
+			name = action_key,
+			preconds = open_door_preconds,
+			effects = open_door_effects,
+			handler = action.action_path,
+			cost = action.base_cost + DISTANCE_COST_ADJUSTMENT(pawn, A),
+			charges = action.base_charges,
+			instant = FALSE,
+			action_args = action_args
 		)
 
 	return action_key
 
 
-/datum/goai/mob_commander/proc/HandleAirlockOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/obstruction)
-	var/mob/pawn = src.GetPawn()
-	if (!pawn || !istype(pawn))
+/datum/goai/mob_commander/proc/HandleAirlockOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock)
+	var/mob/mob_pawn = src.GetPawn()
+	if (!mob_pawn || !istype(mob_pawn))
+		tracker.SetFailed()
 		return
 
 	if (!tracker)
 		return
 
-	var/walk_dist = (tracker?.BBSetDefault("StartDist", (ManhattanDistance(get_turf(pawn), obstruction) || 0)) || 0)
+	airlock = resolve_weakref(airlock)
 
-	if(tracker.IsOlderThan(src.ai_tick_delay * (10 + walk_dist)))
-		if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-			src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+	if(isnull(airlock))
+		tracker.SetDone()
+		return
+
+	if(TimedOutWalkDist(tracker, mob_pawn, airlock))
+		DropObstacleMemory(airlock)
+		OBSTACLE_DEBUG_LOG("Tracker timed-out for [airlock] [COORDS_TUPLE(airlock)] open task")
 		tracker.SetFailed()
 		return
 
 	//If the mob can see the airlock, check if its bolt lights are on
-	if(obstruction in src.brain.perceptions[SENSE_SIGHT_CURR])
-		if(obstruction.locked && obstruction.lights)
+	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR])
+		if(airlock.locked && airlock.lights)
 			tracker.SetFailed()
-			src.brain.SetMemory(MEM_OBJ_LOCKED(obstruction), TRUE, 5 MINUTES)
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+			src.brain.SetMemory(MEM_OBJ_LOCKED(airlock), TRUE, 5 MINUTES)
+			DropObstacleMemory(airlock)
+			OBSTACLE_DEBUG_LOG("Airlock [airlock] [COORDS_TUPLE(airlock)] is bolted - Failing open task")
 			return
-		if(obstruction.p_open)
+		if(airlock.p_open)
 			tracker.SetFailed()
-			src.brain.SetMemory(MEM_OBJ_PANELOPEN(obstruction), TRUE, 5 MINUTES)
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+			src.brain.SetMemory(MEM_OBJ_PANELOPEN(airlock), TRUE, 5 MINUTES)
+			DropObstacleMemory(airlock)
+			OBSTACLE_DEBUG_LOG("Panel is open for [airlock] [COORDS_TUPLE(airlock)] - Failing open task")
 			return
 
-	var/turf/obs_turf = get_turf(obstruction)
-	var/dist_to_obs = ChebyshevDistance(get_turf(pawn), obs_turf)
+	if(!NavigateNextTo(tracker, mob_pawn, airlock))
+		return
 
-	if(dist_to_obs < 2 && obstruction.density)
+	if(airlock.density)
 		//The mob is next to the airlock. Poke it and see what it learns
-		if(obstruction.locked || !obstruction.arePowerSystemsOn())
+
+		var/fail_text
+
+		if(airlock.locked)
 			//Airlock won't open (bolted/unpowered). Add it to the memory and fail the tracker.
-			obstruction.attack_hand(pawn)
-			tracker.SetFailed()
-			src.brain.SetMemory(obstruction.locked ? MEM_OBJ_LOCKED(obstruction) : MEM_OBJ_NOPOWER(obstruction), TRUE, 5 MINUTES)
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
-			return
-		if(!obstruction.allowed(pawn))
-			//No access to the airlock. Add it memory and fail the tracker. Still poke it though for that sweet sweet denied buzz
-			obstruction.attack_hand(pawn)
-			tracker.SetFailed()
-			src.brain.SetMemory(MEM_OBJ_NOACCESS(obstruction), TRUE) //Come back to this and change the ttl if changing IDs/access becomes a thing
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
-			return
-		if(obstruction.p_open)
+			src.brain.SetMemory(MEM_OBJ_LOCKED(airlock), TRUE, 5 MINUTES)
+			fail_text = "is bolted"
+
+		if(airlock.p_open)
 			//The panel is open, but somehow our pawn didn't see it. Normal attack_hand()'s wouldn't work here. Fail
-			tracker.SetFailed()
-			src.brain.SetMemory(MEM_OBJ_PANELOPEN(obstruction), TRUE, 5 MINUTES)
-			if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-				src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
-			return
+			src.brain.SetMemory(MEM_OBJ_PANELOPEN(airlock), TRUE, 5 MINUTES)
+			fail_text = "has its panel open"
+
+		if (!airlock.arePowerSystemsOn())
+			src.brain.SetMemory(MEM_OBJ_NOPOWER(airlock), TRUE, 5 MINUTES)
+			fail_text = "has no power"
+
+		if(!airlock.allowed(mob_pawn))
+			//No access to the airlock. Add it memory and fail the tracker. Still poke it though for that sweet sweet denied buzz
+			src.brain.SetMemory(MEM_OBJ_NOACCESS(airlock), TRUE, MEM_TIME_LONGTERM) //Come back to this and change the ttl if changing IDs/access becomes a thing
+			fail_text = "is access restricted"
 
 		//This is hacky, but we'll call this manually so that we get the return from machinery/shock(),
 		//There's a cooldown so calling it twice (once implicitly via attack_hand) shouldn't be an issue
-		//Todo: Update the memory from the /mob/living/carbon/electrocute_act proc instead
 
-		if(obstruction.isElectrified())
-			if(obstruction.shock(pawn, 100))
-				src.brain.SetMemory(MEM_OBJ_SHOCKED(obstruction), TRUE, MEM_TIME_LONGTERM)
-		obstruction.attack_hand(pawn)
+		if(airlock.isElectrified())
+			if(airlock.shock(mob_pawn, 100))
+				src.brain.SetMemory(MEM_OBJ_SHOCKED(airlock), TRUE, MEM_TIME_LONGTERM)
+				tracker.SetFailed()
+				DropObstacleMemory(airlock)
+				OBSTACLE_DEBUG_LOG("[airlock] [COORDS_TUPLE(airlock)] is electrified - Failing open task")
+				return
+
+		airlock.attack_hand(mob_pawn)
+
+		if(fail_text)
+			tracker.SetFailed()
+			DropObstacleMemory(airlock)
+			OBSTACLE_DEBUG_LOG("[airlock] [COORDS_TUPLE(airlock)] [fail_text] - Failing open task")
+			return
 
 
-	if(!obstruction.density)
+	else
+		//The airlock is open; walk into its turf
+		var/turf/airlock_turf = get_turf(airlock)
+		var/dist_to_obs = ChebyshevDistance(get_turf(mob_pawn), airlock_turf)
+
 		if(dist_to_obs < 1)
 			if(tracker.IsRunning())
-				if(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null) == obstruction)
-					src.brain.DropMemory(MEM_OBSTRUCTION("WAYPOINT"))
+				DropObstacleMemory(airlock)
 				tracker.SetDone()
-
 		else
 			if(!tracker.BBGet("entering_door", FALSE))
-				StartNavigateTo(obs_turf, 0)
+				StartNavigateTo(airlock_turf, 0)
 				tracker.BBSet("entering_door", TRUE)
-	else
-		var/list/path_to_door = tracker.BBGet("PathToDoor", null)
-		if(isnull(path_to_door) || !src.active_path)
-			path_to_door = StartNavigateTo(obs_turf, 1)
-			tracker.BBSet("PathToDoor", path_to_door)
 
 
 /datum/goai/mob_commander/proc/HandleAirlockHack(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock, var/list/wires, var/cut)
 	log_debug("Hack Airlock task for [airlock] ([airlock.x],[airlock.y]) - Wires: [wires] - Cut: [cut]")
-	//debug
-	if(airlock.locked && AIRLOCK_WIRE_DOOR_BOLTS in wires)
-		airlock.unlock()
+	//TODO: Refactor this once we work out how we're going to handle inventory management (Actual pain)
+	var/mob/mob_pawn = src.GetPawn()
+	if (!mob_pawn || !istype(mob_pawn))
+		tracker.SetFailed()
+		return
+
+	airlock = resolve_weakref(airlock)
+
+	if(isnull(airlock))
 		tracker.SetDone()
+		return
+
+	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR])
+		if(!airlock.p_open)
+			tracker.SetFailed()
+			DropObstacleMemory(airlock)
+			return
+
+	var/datum/wires/airlock_wires = airlock.wires
+
+	//Each wire attempt has a 5 second cooldown. So *max* this should take is 5*wire count, with some wriggle room for fixing wires + movement
+	if(TimedOutWalkDist(tracker, mob_pawn, airlock, (airlock_wires.wire_count * 5 SECONDS) + 10 SECONDS))
+		OBSTACLE_DEBUG_LOG("Hack task for [airlock] timed out!")
+		DropObstacleMemory(airlock)
+		tracker.SetFailed()
+		return
+
+	//We can't hack the airlock until we're next to it. Keep walking pal
+	if(!NavigateNextTo(tracker, mob_pawn, airlock))
+		return
+
+	//5 second cooldown between hacks
+	var/last_action = tracker.BBGet("LastAction", null)
+	if(last_action && (world.time < last_action + 5 SECONDS))
+		return
+
+	var/list/wire_queue = tracker.BBGet("WireQueue", list())
+	var/list/to_find = tracker.BBGet("TargetWires", wires.Copy())
+	var/list/tried_wires = tracker.BBGet("TriedWires", list())
+	var/list/known_wires = src.brain.GetMemoryValue(MEM_AIRLOCK_WIRES, list())
+
+	//Someone's been here before us. Let's fix up everything first to give us a blank slate
+	if(!length(tried_wires) && airlock_wires.wires_status)
+		OBSTACLE_DEBUG_LOG("[airlock] previously hacked. Fixing wires.")
+		for(var/wire in airlock_wires.wires)
+			if(airlock_wires.IsColourCut(wire))
+				wire_queue[wire] = "mend"
+		tracker.BBSet("WireQueue", wire_queue)
+		return
+
+	//Process queued actions from the last tick
+	if(length(wire_queue))
+		var/wire = wire_queue[1]
+		var/action = wire_queue[wire]
+		var/is_cut = airlock_wires.IsColourCut(wire)
+		wire_queue -= wire
+		switch(action)
+			if("cut_wire")
+				OBSTACLE_DEBUG_LOG("Cutting wire [wire] for [airlock]")	//Temp debug logging
+				if(!is_cut)
+					airlock_wires.CutWireColour(wire)
+			if("cut_and_mend")
+				OBSTACLE_DEBUG_LOG("Cutting wire [wire] for [airlock]")
+				if(!is_cut)
+					airlock_wires.CutWireColour(wire)
+				wire_queue[wire] = "mend_wire"
+			if("mend_wire")
+				OBSTACLE_DEBUG_LOG("Mending wire [wire] for [airlock]")
+				if(is_cut)
+					airlock_wires.CutWireColour(wire)
+			if("pulse_wire")
+				OBSTACLE_DEBUG_LOG("Pulsing wire [wire] for [airlock]")
+				airlock_wires.PulseColour(wire)
+
+		tracker.BBSet("WireQueue", wire_queue)
+		tracker.BBSet("LastAction", world.time)
+		return
+
+	//We know what wire we want, queue it up
+	else if(to_find[1] in known_wires)
+		var/target_effect = to_find[1]
+		var/target_wire = known_wires[target_effect]
+		OBSTACLE_DEBUG_LOG("Wire [target_wire] has previously known effect [target_effect]")
+		wire_queue[target_wire] = cut ? "cut_wire" : "pulse_wire"
+		to_find -= target_effect
+		tracker.BBSet("WireQueue", wire_queue)
+		tracker.BBSet("TargetWires", to_find)
+		return
+
+	//There's nothing in the wire queue and no known wires to cut. If we've got nothing left to find, we're done!
+	else if(!length(to_find))
+		OBSTACLE_DEBUG_LOG("No wires left in hack queue. Complete")	//Temp
+		tracker.SetDone()
+		return
+
+	//We've got unknown wires to find, and we have no idea what we're doing! Pulse and see what happens!
+	else
+		var/list/unknown_wires = airlock_wires.wires - tried_wires
+		var/picked_wire = pick(unknown_wires)
+		var/result = airlock_wires.wires[picked_wire]
+		OBSTACLE_DEBUG_LOG("Pick random wire [picked_wire] for [airlock]. Effect: [result]")
+
+		airlock_wires.PulseColour(picked_wire)
+
+		if(result & (AIRLOCK_WIRE_MAIN_POWER1|AIRLOCK_WIRE_MAIN_POWER2))	//Much like players, we don't care *which* main power wire we find. Either one works. If for some weird reason AIRLOCK_MAIN_POWER2 was specified in to_find, and POWER1 was found, it'll get picked up next tick
+			known_wires[AIRLOCK_WIRE_MAIN_POWER1] = picked_wire
+			known_wires[AIRLOCK_WIRE_MAIN_POWER2] = picked_wire
+		else if(result & (AIRLOCK_WIRE_BACKUP_POWER1|AIRLOCK_WIRE_BACKUP_POWER2))	//Same with backup power
+			known_wires[AIRLOCK_WIRE_BACKUP_POWER1] = picked_wire
+			known_wires[AIRLOCK_WIRE_BACKUP_POWER2] = picked_wire
+		else
+			known_wires[result] = picked_wire
+
+		src.brain.SetMemory(MEM_AIRLOCK_WIRES, known_wires)
+
+		if(result in to_find)
+			OBSTACLE_DEBUG_LOG("Wanted result for [airlock]")
+			if(cut)
+				wire_queue[picked_wire] = "cut_wire"
+			to_find -= result
+			tracker.BBSet("TargetWires", to_find)
+		else
+			OBSTACLE_DEBUG_LOG("Unwanted result for [airlock]")
+			wire_queue[picked_wire] = "cut_and_mend"
+			tried_wires.Add(picked_wire)
+			tracker.BBSet("TriedWires", tried_wires)
+
+		tracker.BBSet("LastAction", world.time)
+
+/datum/goai/mob_commander/proc/HandleAirlockAI()
+	//todo
 	return
 
-	//VERY WIP. Fuck this AAA
-	//Code is unreachable as wip.
-
-	//Todo: Add cooldown here
-
-	//var/list/tried_wires = tracker.BBGet("WireAttempts", list())	//TBI
-	var/list/to_fix = tracker.BBGet("FixWires", list())
-	var/list/known_wires = src.brain.GetMemoryValue(MEM_AIRLOCK_WIRES, list())
-	//var/datum/wires/airlock_wires = airlock.wires		//TBI
-
-	if(length(to_fix))
-		//var/wire = pick_n_take(to_fix) //TBI
-		tracker.BBSet("FixWires", to_fix)
-		//fix wire stuff here
+/datum/goai/mob_commander/proc/HandleAirlockPanelScrew(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock, var/open)
+	var/mob/living/mob_pawn = src.GetPawn()
+	if(!istype(mob_pawn) || isnull(open))
+		tracker.SetFailed()
 		return
 
-	if(wires[1] in known_wires)
-		var/target_wire = wires[1]
-		wires.Remove(target_wire)
-		if(cut)
-			//Todo: cut stuff here
-		else
-			//Todo: pulse stuff here
+	airlock = resolve_weakref(airlock)
 
-	if(!length(wires))
+	if(!istype(airlock))
+		tracker.SetFailed()
+		return
+
+	if(TimedOutWalkDist(tracker, mob_pawn, airlock, 15 SECONDS))
+		DropObstacleMemory(airlock)
+		OBSTACLE_DEBUG_LOG("Tracker timed-out for [airlock] [COORDS_TUPLE(airlock)] panel screw task")
+		return
+
+	if(tracker.BBGet("InProgress", FALSE))
+		return
+
+	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR] && airlock.p_open == open)
 		tracker.SetDone()
 		return
 
-	//var/list/wireColours = list("red", "blue", "green", "darkred", "orange", "brown", "gold", "gray", "cyan", "navy", "purple", "pink", "black", "yellow")
-	/*
-	var/const/AIRLOCK_WIRE_IDSCAN = 1
-	var/const/AIRLOCK_WIRE_MAIN_POWER1 = 2
-	var/const/AIRLOCK_WIRE_MAIN_POWER2 = 4
-	var/const/AIRLOCK_WIRE_DOOR_BOLTS = 8
-	var/const/AIRLOCK_WIRE_BACKUP_POWER1 = 16
-	var/const/AIRLOCK_WIRE_BACKUP_POWER2 = 32
-	var/const/AIRLOCK_WIRE_OPEN_DOOR = 64
-	var/const/AIRLOCK_WIRE_AI_CONTROL = 128
-	var/const/AIRLOCK_WIRE_ELECTRIFY = 256
-	var/const/AIRLOCK_WIRE_SAFETY = 512
-	var/const/AIRLOCK_WIRE_SPEED = 1024
-	var/const/AIRLOCK_WIRE_LIGHT = 2048
-	*/
+	if(!NavigateNextTo(tracker, mob_pawn, airlock))
+		return
+
+	tracker.BBSet("InProgress", TRUE)
+
+	if(UseGenericTool(mob_pawn, airlock, "isscrewdriver", STATE_HASSCREWDRIVER))
+		tracker.SetDone()
+	else
+		tracker.SetFailed()
+		DropObstacleMemory(airlock)
+
+/datum/goai/mob_commander/proc/HandleAirlockPryOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock, var/open)
+	var/mob/living/mob_pawn = src.GetPawn()
+	if(!istype(mob_pawn) || isnull(open))
+		tracker.SetFailed()
+		return
+
+	airlock = resolve_weakref(airlock)
+
+	if(isnull(airlock))
+		tracker.SetDone()
+		return
+	else if(!istype(airlock))
+		tracker.SetFailed()
+		return
+
+	if(TimedOutWalkDist(tracker, mob_pawn, airlock, 15 SECONDS))
+		DropObstacleMemory(airlock)
+		OBSTACLE_DEBUG_LOG("Tracker timed-out for [airlock] [COORDS_TUPLE(airlock)] pry open task")
+		return
+
+	if(tracker.BBGet("InProgress", FALSE))
+		return
+
+	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR] && airlock.density != open)
+		tracker.SetDone()
+		return
+
+	if(!NavigateNextTo(tracker, mob_pawn, airlock))
+		return
+
+	tracker.BBSet("InProgress", TRUE)
+
+	var/used_tool = UseGenericTool(mob_pawn, airlock, "iscrowbar", STATE_HASCROWBAR)
+
+	if(used_tool || isnull(used_tool))
+		tracker.SetDone()
+	else
+		tracker.SetFailed()
+		DropObstacleMemory(airlock)

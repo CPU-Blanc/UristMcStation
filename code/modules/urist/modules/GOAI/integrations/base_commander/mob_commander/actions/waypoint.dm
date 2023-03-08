@@ -23,7 +23,7 @@
 	var/atom/goal = target
 
 	if(isnull(goal) && default_to_waypoint)
-		var/atom/waypoint = owner.brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+		var/atom/waypoint = resolve_weakref(owner.brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 		goal = waypoint
 
 	if(isnull(goal) || !goal)
@@ -131,7 +131,7 @@
 
 				OBSTACLEHUNT_DEBUG_LOG("[owner]: LINK OBSTRUCTION => [obstruction] @ [LOCATION_WITH_COORDS(obstruction)]")
 				var/_obstruction_tag = (isnull(obstruction_tag) ? "WAYPOINT" : obstruction_tag)
-				owner.brain.SetMemory(MEM_OBSTRUCTION(_obstruction_tag), obstruction, MEM_TIME_LONGTERM)
+				owner.brain.SetMemory(MEM_OBSTRUCTION(_obstruction_tag), weakref(obstruction), MEM_TIME_LONGTERM)
 				break
 
 	return
@@ -155,7 +155,7 @@
 	var/atom/true_waypoint = waypoint
 
 	if(isnull(true_waypoint))
-		true_waypoint = brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+		true_waypoint = resolve_weakref(brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 
 	if(isnull(true_waypoint))
 		tracker?.SetFailed() // b/c we shouldn't have triggered this in the first place if it's null
@@ -164,7 +164,7 @@
 	// Astar checking for obstacles
 	src.SpotObstacles(owner=src, target=true_waypoint, default_to_waypoint=FALSE, obstruction_tag = "WAYPOINT")
 
-	var/atom/_obstruction = (isnull(obstruction) ? brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT")) : obstruction)
+	var/atom/_obstruction = (isnull(obstruction) ? resolve_weakref(brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"))) : obstruction)
 	world.log << "Current obstruction is [_obstruction] @ [COORDS_TUPLE(_obstruction)]"
 
 	var/_move_action_name = (move_action_name || "MoveTowards")

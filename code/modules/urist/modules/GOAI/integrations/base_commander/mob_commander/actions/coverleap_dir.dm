@@ -21,7 +21,7 @@
 	var/list/curr_view = brain?.perceptions?.Get(SENSE_SIGHT_CURR)
 	curr_view.Add(_startpos)
 
-	var/turf/safespace_loc = brain?.GetMemoryValue(MEM_SAFESPACE, null)
+	var/turf/safespace_loc = resolve_weakref(brain?.GetMemoryValue(MEM_SAFESPACE, null))
 	if(safespace_loc)
 		curr_view.Add(safespace_loc)
 
@@ -30,7 +30,7 @@
 
 	var/mob/pawn_mob = pawn
 
-	var/atom/waypoint_ident = brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+	var/atom/waypoint_ident = resolve_weakref(brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 	var/datum/chunk/waypointchunk = null
 
 	if(waypoint_ident)
@@ -79,7 +79,7 @@
 
 		waypointchunk = chunkserver.ChunkForTile(effective_waypoint_x, effective_waypoint_y, pawn.z)
 
-	var/turf/unreachable = brain?.GetMemoryValue("UnreachableTile", null)
+	var/turf/unreachable = resolve_weakref(brain?.GetMemoryValue("UnreachableTile", null))
 
 	for(var/atom/candidate_cover in curr_view)
 		// Need to aggressively trim down processed types here or this will take forever in object-dense areas
@@ -239,7 +239,7 @@
 	var/turf/startpos = tracker.BBSetDefault("startpos", get_turf(pawn))
 	var/list/threats = new()
 	var/min_safe_dist = brain.GetPersonalityTrait(KEY_PERS_MINSAFEDIST, 2)
-	var/turf/prev_loc_memdata = brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE)
+	var/turf/prev_loc_memdata = resolve_weakref(brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE))
 
 	// Main threat:
 	var/dict/primary_threat_ghost = GetActiveThreatDict()
@@ -269,7 +269,7 @@
 		tracker.SetDone()
 
 		if(brain)
-			brain.SetMemory(MEM_DIRLEAP_BESTPOS, best_local_pos)
+			brain.SetMemory(MEM_DIRLEAP_BESTPOS, weakref(best_local_pos))
 
 	else
 		tracker.SetFailed()
@@ -289,7 +289,7 @@
 	var/turf/best_local_pos = null
 	best_local_pos = best_local_pos || tracker?.BBGet("bestpos", null)
 	if(brain && isnull(best_local_pos))
-		best_local_pos = brain.GetMemoryValue(MEM_DIRLEAP_BESTPOS, best_local_pos)
+		best_local_pos = resolve_weakref(brain.GetMemoryValue(MEM_DIRLEAP_BESTPOS, best_local_pos))
 
 	var/min_safe_dist = (brain?.GetPersonalityTrait(KEY_PERS_MINSAFEDIST, null) || 2)
 	var/frustration_repath_maxthresh = (brain?.GetPersonalityTrait(KEY_PERS_FRUSTRATION_THRESH, null) || 3)
@@ -317,7 +317,7 @@
 		threats[secondary_threat_ghost] = secondary_threat
 
 	// Previous position
-	var/turf/prev_loc_memdata = brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE)
+	var/turf/prev_loc_memdata = resolve_weakref(brain?.GetMemoryValue(MEM_PREVLOC, null, FALSE))
 
 	// Shot-at logic (avoid known currently unsafe positions):
 	/*
@@ -386,7 +386,7 @@
 	if(tracker.IsTriggered() && !tracker.is_done)
 		if(tracker.TriggeredMoreThan(1))
 			tracker.SetDone()
-			brain?.SetMemory(MEM_PREVLOC, startpos, MEM_TIME_LONGTERM)
+			brain?.SetMemory(MEM_PREVLOC, weakref(startpos), MEM_TIME_LONGTERM)
 
 	else if(src.active_path && tracker.IsOlderThan(COMBATAI_MOVE_TICK_DELAY * (20 + walk_dist)))
 		if(needybrain)

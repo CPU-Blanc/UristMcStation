@@ -35,13 +35,13 @@
 
 	return blocker
 
-/proc/GenerateDynamicDirBlocker(var/owner, var/invert_dir = FALSE)
+/proc/GenerateDynamicDirBlocker(var/owner, var/invert_dir = FALSE, var/block_all = FALSE)
 	var/atom/atom_owner = owner
 	var/datum/directional_blocker/blocker = null
 
 	if(atom_owner)
 		var/dir_to_block = invert_dir ? dir2opposite(atom_owner.dir) : atom_owner.dir
-		blocker = new(dir_to_block, FALSE, atom_owner.density)
+		blocker = new(dir_to_block, block_all, atom_owner.density)
 
 	return blocker
 
@@ -60,7 +60,7 @@
 	else
 		return FALSE
 
-/proc/UpdateDynamicDirBlocker(var/owner, var/invert_dir = FALSE)
+/proc/UpdateDynamicDirBlocker(var/owner, var/invert_dir = FALSE, var/block_all = FALSE)
 	var/atom/atom_owner = owner
 	if(!atom_owner)
 		return null
@@ -69,6 +69,10 @@
 
 	if(!blocker)
 		return null
+
+	if(block_all != blocker.block_all)
+		blocker.block_all = block_all
+		. = TRUE
 
 	var/dir_to_block = invert_dir ? dir2opposite(atom_owner.dir) : atom_owner.dir
 

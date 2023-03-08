@@ -15,6 +15,9 @@
 # define NEED_OBJ_PRY(o) "pry [o] [ref(o)]"
 # define NEED_OBJ_SCREW(o) "screw [o] [ref(o)]"
 # define NEED_OBJ_BROKEN(o) "break [o] [ref(o)]"
+# define NEED_OBJ_DEPOWERED(o) "depower [o] [ref(o)]"
+# define NEED_OBJ_FLIPPED(o) "flip [o] [ref(o)]"
+# define NEED_OBJ_CLIMB(o) "climb [o] [ref(o)]"
 
 # define STATE_HASCROWBAR "has_crowbar"
 # define STATE_HASMULTITOOL "has_multitool"
@@ -110,3 +113,5 @@
 # define SENSE_COVERLEAP_WAYFINDER "SenseCoverleapWayfinder"
 
 # define ADD_NEARNESS_EFFECT_TO(List, Startpos, Varname) for(var/turf/##Varname in trange(1, Startpos)) { if(!(##Varname && istype(##Varname))) { continue }; List[STATE_NEAR_ATOM(##Varname)] = TRUE }
+
+# define DISTANCE_COST_ADJUSTMENT(Pawn, Trg) (rand() + (Pawn ? get_dist(Trg, Pawn)*3 : 0))

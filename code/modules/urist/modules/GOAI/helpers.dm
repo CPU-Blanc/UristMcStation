@@ -63,3 +63,36 @@
 
 	return result
 
+# ifdef GOAI_SS13_SUPPORT
+
+/proc/resolve_weakref(var/weakref/wref)
+	if(!wref)
+		return
+	if(istype(wref))
+		return wref.resolve()
+	else
+		return wref
+
+# endif
+
+/**
+ * Returns `TRUE` if *all* keys in `little` are also in `big`, else `FALSE`
+ */
+/proc/AND_list_keys(var/list/little, var/list/big)
+	if(!islist(little) || !islist(big))
+		return FALSE
+	for(var/key in little)
+		if(!(key in big))
+			return FALSE
+	return TRUE
+
+/**
+ * Returns `TRUE` if *any* key in `little` is in `big`, else `FALSE`
+ */
+/proc/OR_list_keys(var/list/little, var/list/big)
+	if(!islist(little) || !islist(big))
+		return FALSE
+	for(var/key in little)
+		if(key in big)
+			return TRUE
+	return FALSE

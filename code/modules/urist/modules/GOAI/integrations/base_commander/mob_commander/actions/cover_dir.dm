@@ -15,7 +15,7 @@
 
 	var/list/curr_view = (brain?.perceptions?.Get(SENSE_SIGHT_CURR)) || list()
 
-	var/turf/safespace_loc = brain?.GetMemoryValue(MEM_SAFESPACE, null)
+	var/turf/safespace_loc = resolve_weakref(brain?.GetMemoryValue(MEM_SAFESPACE, null))
 	if(safespace_loc)
 		curr_view.Add(safespace_loc)
 
@@ -24,7 +24,7 @@
 	var/effective_waypoint_x = null
 	var/effective_waypoint_y = null
 
-	var/atom/waypoint_ident = brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+	var/atom/waypoint_ident = resolve_weakref(brain?.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 	var/mob/pawn_mob = pawn
 
 	if(waypoint_ident)
@@ -222,7 +222,7 @@
 
 	if(best_local_pos)
 		tracker.BBSet("bestpos", best_local_pos)
-		brain?.SetMemory("DirectionalCoverBestpos", best_local_pos)
+		brain?.SetMemory("DirectionalCoverBestpos", weakref(best_local_pos))
 		tracker.SetDone()
 
 
@@ -243,7 +243,7 @@
 
 	var/turf/best_local_pos = tracker?.BBGet("bestpos", null)
 	if(brain && isnull(best_local_pos))
-		best_local_pos = brain.GetMemoryValue("DirectionalCoverBestpos", null)
+		best_local_pos = resolve_weakref(brain.GetMemoryValue("DirectionalCoverBestpos", null))
 
 	ACTION_RUNTIME_DEBUG_LOG("[src]: INITIAL best_local_pos is: ([best_local_pos?.x], [best_local_pos?.y])")
 
@@ -323,7 +323,7 @@
 		best_local_pos?.pDrawVectorbeam(pawn, best_local_pos, "n_beam")
 		tracker.BBSet("bestpos", best_local_pos)
 		tracker?.BBSet("StartDist", (ManhattanDistance(get_turf(pawn), best_local_pos) || 0))
-		brain?.SetMemory("DirectionalCoverBestpos", best_local_pos)
+		brain?.SetMemory("DirectionalCoverBestpos", weakref(best_local_pos))
 
 		ACTION_RUNTIME_DEBUG_LOG("[src]: ACTION Best local pos ([best_local_pos?.x], [best_local_pos?.y])")
 

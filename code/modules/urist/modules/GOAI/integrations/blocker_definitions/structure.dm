@@ -71,10 +71,10 @@
 
 // TABLE
 /obj/structure/table/GenerateBlocker()
-	return GenerateDynamicDirBlocker(src)
+	return GenerateDynamicDirBlocker(src, FALSE, !src.flipped)
 
 /obj/structure/table/UpdateBlocker()
-	return UpdateDynamicDirBlocker(src)
+	return UpdateDynamicDirBlocker(src, FALSE, !src.flipped)
 
 // WINDOWS
 /obj/structure/window/GenerateBlocker()

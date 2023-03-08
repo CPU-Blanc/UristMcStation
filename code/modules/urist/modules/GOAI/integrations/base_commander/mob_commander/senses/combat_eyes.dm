@@ -123,7 +123,7 @@
 		// No point processing this if there's no memories to use
 		return
 
-	var/atom/waypoint = owner.brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE)
+	var/atom/waypoint = resolve_weakref(owner.brain.GetMemoryValue(MEM_WAYPOINT_IDENTITY, null, FALSE, TRUE))
 
 	if(isnull(waypoint))
 		return

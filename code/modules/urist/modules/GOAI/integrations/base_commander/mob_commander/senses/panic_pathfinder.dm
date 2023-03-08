@@ -80,7 +80,7 @@
 	)
 
 	// Obstacles:
-	var/atom/obstruction = owner_brain.GetMemoryValue(MEM_OBSTRUCTION("PANIC"))
+	var/atom/obstruction = resolve_weakref(owner_brain.GetMemoryValue(MEM_OBSTRUCTION("PANIC")))
 	var/handled = isnull(obstruction) // if obs is null, counts as handled
 
 	var/list/shared_preconds = list(
@@ -103,6 +103,6 @@
 	)
 
 	if(handled)
-		owner_brain?.SetMemory(MEM_BESTPOS_PANIC, waypoint, PANIC_SENSE_THROTTLE*3)
+		owner_brain?.SetMemory(MEM_BESTPOS_PANIC, weakref(waypoint), PANIC_SENSE_THROTTLE*3)
 
 	return handled

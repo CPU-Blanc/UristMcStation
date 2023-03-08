@@ -8,8 +8,7 @@
 	if(!(M?.brain))
 		return
 
-	var/datum/memory/created_mem = M.brain.SetMemory(MEM_WAYPOINT_IDENTITY, Trg, PLUS_INF)
-	var/atom/waypoint = created_mem?.val
+	M.brain.SetMemory(MEM_WAYPOINT_IDENTITY, weakref(Trg), PLUS_INF)
 
 	M.SetState(STATE_DOWNTIME, FALSE)
 	to_chat(usr, "Set [M] downtime-state to [FALSE]")
@@ -18,9 +17,9 @@
 	M.SetState(STATE_HASWAYPOINT, TRUE)
 	to_chat(usr, "Set [M] waypoint-state to [TRUE]")
 
-	to_chat(usr, (waypoint ? "[M] now tracking [waypoint]" : "[M] not tracking waypoints"))
+	to_chat(usr, (Trg ? "[M] now tracking [Trg]" : "[M] not tracking waypoints"))
 
-	return waypoint
+	return Trg
 
 
 /mob/verb/CommanderGiveMoveOrder(datum/goai/mob_commander/combat_commander/M in GOAI_LIBBED_GLOB_ATTR(global_goai_registry), posX as num, posY as num)
@@ -38,8 +37,7 @@
 	if(!(M?.brain))
 		return
 
-	var/datum/memory/created_mem = M.brain.SetMemory(MEM_WAYPOINT_IDENTITY, position, PLUS_INF)
-	var/atom/waypoint = created_mem?.val
+	M.brain.SetMemory(MEM_WAYPOINT_IDENTITY, weakref(position), PLUS_INF)
 
 	M.SetState(STATE_DOWNTIME, FALSE)
 	to_chat(usr, "Set [M] downtime-state to [FALSE]")
@@ -47,9 +45,9 @@
 	M.SetState(STATE_HASWAYPOINT, TRUE)
 	to_chat(usr, "Set [M] waypoint-state to [TRUE]")
 
-	to_chat(usr, (waypoint ? "[M] now tracking [waypoint] @ ([trueX], [trueY], [trueZ])" : "[M] not tracking waypoints"))
+	to_chat(usr, (position ? "[M] now tracking [position] @ ([trueX], [trueY], [trueZ])" : "[M] not tracking waypoints"))
 
-	return waypoint
+	return position
 
 
 /mob/verb/CommanderCancelOrders(datum/goai/mob_commander/combat_commander/M in GOAI_LIBBED_GLOB_ATTR(global_goai_registry))
