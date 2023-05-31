@@ -161,6 +161,10 @@
 			if(T && istype(T))
 				continue
 
+			var/obj/machinery/computer/C = object
+			if(C && istype(C))
+				continue
+
 			# endif
 
 			# ifdef GOAI_LIBRARY_FEATURES

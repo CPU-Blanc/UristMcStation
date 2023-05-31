@@ -329,7 +329,7 @@
 					if(potential_obstruction_curr == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_curr.GetBlockerData(TRUE)
+					var/datum/directional_blocker/blocker = potential_obstruction_curr.GetBlockerData(TRUE, TRUE)
 					if(!blocker)
 						continue
 
@@ -345,7 +345,7 @@
 					if(potential_obstruction_prev == pawn)
 						continue
 
-					var/datum/directional_blocker/blocker = potential_obstruction_prev.GetBlockerData(TRUE)
+					var/datum/directional_blocker/blocker = potential_obstruction_prev.GetBlockerData(TRUE, TRUE)
 					if(!blocker)
 						continue
 

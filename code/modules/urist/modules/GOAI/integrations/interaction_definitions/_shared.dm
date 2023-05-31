@@ -11,6 +11,10 @@
 
 	return holder
 
+/datum/interactions_holder/ClimbHolder
+	action_paths = list(/datum/interaction/GenericClimb)
+
+
 /datum/interaction/GenericClimb
 	action_path = /datum/goai/mob_commander/proc/HandleGenericClimb
 	base_cost = 15

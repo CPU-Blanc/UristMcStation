@@ -70,12 +70,10 @@ GLOBAL_LIST_EMPTY(goai_interaction_holders)
 	for(var/path in action_paths)
 		if(ispath(path))
 			var/datum/interaction/I = GLOB.goai_interactions[path]
-			if(I)
-				available_actions.Add(I)
-			else
+			if(!I)
 				I = new path
-				available_actions.Add(I)
 				GLOB.goai_interactions[path] = I
+			available_actions.Add(I)
 
 /**
  * Returns a list of `/datum/interaction` that are available to the specified filter(s).
@@ -222,5 +220,17 @@ GLOBAL_LIST_EMPTY(goai_interaction_holders)
 
 			if(log_on_missing)
 				to_world_log("Failed to get interaction data for [src] - no interaction data!")
+
+		//Climbable atoms are -everywhere- and would require SO many unique holders. This will ensure *all* climbable atoms have a climb interaction, either their own as defined above, or the generic one appended to their holder or in a newly generated one.
+		if(src.atom_flags & ATOM_FLAG_CLIMBABLE)
+			if(!holder)
+				holder = GenerateGenericInteractions(src, /datum/interactions_holder/ClimbHolder)
+				src.interactions_holder = holder
+			else if(!holder.GetAction(null, ACT_CLIMB))
+				var/datum/interaction/climb = GLOB.goai_interactions[/datum/interaction/GenericClimb]
+				if(!climb)
+					climb = new /datum/interaction/GenericClimb
+					GLOB.goai_interactions[/datum/interaction/GenericClimb] = climb
+				holder.available_actions.Add(climb)
 
 	return holder

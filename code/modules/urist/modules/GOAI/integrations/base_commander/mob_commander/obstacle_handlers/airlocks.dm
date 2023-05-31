@@ -296,7 +296,7 @@
 
 /datum/goai/mob_commander/proc/HandleAirlockOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock)
 	var/mob/mob_pawn = src.GetPawn()
-	if (!mob_pawn || !istype(mob_pawn))
+	if (!mob_pawn || !istype(mob_pawn) || !src.brain)
 		tracker.SetFailed()
 		return
 
@@ -316,7 +316,7 @@
 		return
 
 	//If the mob can see the airlock, check if its bolt lights are on
-	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR])
+	if(airlock in src.brain.perceptions?[SENSE_SIGHT_CURR])
 		if(airlock.locked && airlock.lights)
 			tracker.SetFailed()
 			src.brain.SetMemory(MEM_OBJ_LOCKED(airlock), TRUE, 5 MINUTES)
@@ -396,7 +396,7 @@
 	log_debug("Hack Airlock task for [airlock] ([airlock.x],[airlock.y]) - Wires: [wires] - Cut: [cut]")
 	//TODO: Refactor this once we work out how we're going to handle inventory management (Actual pain)
 	var/mob/mob_pawn = src.GetPawn()
-	if (!mob_pawn || !istype(mob_pawn))
+	if (!mob_pawn || !istype(mob_pawn) || !src.brain)
 		tracker.SetFailed()
 		return
 
@@ -406,7 +406,7 @@
 		tracker.SetDone()
 		return
 
-	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR])
+	if(airlock in src.brain.perceptions?[SENSE_SIGHT_CURR])
 		if(!airlock.p_open)
 			tracker.SetFailed()
 			DropObstacleMemory(airlock)
@@ -472,6 +472,12 @@
 		tracker.BBSet("LastAction", world.time)
 		return
 
+	//There's nothing in the wire queue and no known wires to cut. If we've got nothing left to find, we're done!
+	else if(!length(to_find))
+		OBSTACLE_DEBUG_LOG("No wires left in hack queue. Complete")	//Temp
+		tracker.SetDone()
+		return
+
 	//We know what wire we want, queue it up
 	else if(to_find[1] in known_wires)
 		var/target_effect = to_find[1]
@@ -481,12 +487,6 @@
 		to_find -= target_effect
 		tracker.BBSet("WireQueue", wire_queue)
 		tracker.BBSet("TargetWires", to_find)
-		return
-
-	//There's nothing in the wire queue and no known wires to cut. If we've got nothing left to find, we're done!
-	else if(!length(to_find))
-		OBSTACLE_DEBUG_LOG("No wires left in hack queue. Complete")	//Temp
-		tracker.SetDone()
 		return
 
 	//We've got unknown wires to find, and we have no idea what we're doing! Pulse and see what happens!
@@ -529,7 +529,7 @@
 
 /datum/goai/mob_commander/proc/HandleAirlockPanelScrew(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock, var/open)
 	var/mob/living/mob_pawn = src.GetPawn()
-	if(!istype(mob_pawn) || isnull(open))
+	if(!istype(mob_pawn) || isnull(open) || !src.brain)
 		tracker.SetFailed()
 		return
 
@@ -547,7 +547,7 @@
 	if(tracker.BBGet("InProgress", FALSE))
 		return
 
-	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR] && airlock.p_open == open)
+	if(airlock in src.brain.perceptions?[SENSE_SIGHT_CURR] && airlock.p_open == open)
 		tracker.SetDone()
 		return
 
@@ -564,7 +564,7 @@
 
 /datum/goai/mob_commander/proc/HandleAirlockPryOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/airlock/airlock, var/open)
 	var/mob/living/mob_pawn = src.GetPawn()
-	if(!istype(mob_pawn) || isnull(open))
+	if(!istype(mob_pawn) || isnull(open) || !src.brain)
 		tracker.SetFailed()
 		return
 
@@ -585,7 +585,7 @@
 	if(tracker.BBGet("InProgress", FALSE))
 		return
 
-	if(airlock in src.brain.perceptions[SENSE_SIGHT_CURR] && airlock.density != open)
+	if(airlock in src.brain.perceptions?[SENSE_SIGHT_CURR] && airlock.density != open)
 		tracker.SetDone()
 		return
 

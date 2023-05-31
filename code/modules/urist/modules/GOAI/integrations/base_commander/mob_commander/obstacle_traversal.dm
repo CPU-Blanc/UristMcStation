@@ -134,6 +134,35 @@
 			goto_preconds[action_key] = TRUE
 			handled = TRUE
 
+
+	//*****GENERIC TRAVERSAL*****
+
+	//Climbables
+	else if(obstruction.atom_flags & ATOM_FLAG_CLIMBABLE)
+		var/datum/interaction/climb_action = GOAI_GET_ACTION(obstruction, pawn, ACT_CLIMB)
+		if(climb_action)
+			action_key = "[NEED_OBJ_CLIMB(obstruction)]"
+
+			goto_preconds[action_key] = TRUE
+
+			var/list/preconds = common_preconds.Copy()
+			preconds[action_key] = FALSE
+
+			var/list/effects = obs_handled_common_effects.Copy()
+			effects[action_key] = TRUE
+
+			AddAction(
+				name = action_key,
+				preconds = preconds,
+				effects = effects,
+				handler = climb_action.action_path,
+				cost = climb_action.base_cost + DISTANCE_COST_ADJUSTMENT(pawn, obstruction),
+				charges = climb_action.base_charges,
+				instant = FALSE,
+				action_args = list("target" = weakref(obstruction))
+			)
+
+			handled = TRUE
 	# endif
 
 	if(move_handler && (handled || allow_failed))

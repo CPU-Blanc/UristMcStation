@@ -1,6 +1,6 @@
 /datum/goai/mob_commander/proc/HandleGenericBreak(var/datum/ActionTracker/tracker, var/obj/target, var/method)
 	var/mob/mob_pawn = src.GetPawn()
-	if(!mob_pawn || !istype(mob_pawn))
+	if(!mob_pawn || !istype(mob_pawn) || !src.brain)
 		return
 
 	if(!tracker)
@@ -19,7 +19,7 @@
 	if(isnull(target))
 		tracker.SetDone()
 		return
-	else if(istype(M) && M in src.brain.perceptions[SENSE_SIGHT_CURR] && (M.stat & BROKEN))
+	else if(istype(M) && M in src.brain.perceptions?[SENSE_SIGHT_CURR] && (M.stat & BROKEN))
 		tracker.SetDone()
 		DropObstacleMemory(M)
 		return
@@ -58,7 +58,7 @@
 	if(isnull(target))
 		tracker.SetDone()
 		return
-	else if(!istype(target))
+	if(!istype(target))
 		tracker.SetFailed()
 		return
 

@@ -36,7 +36,7 @@
  * Checks if `obstacle` is present in the brain's waypoint obstruction memory. Drops it if it matches
  */
 /datum/goai/mob_commander/proc/DropObstacleMemory(var/atom/obstacle)
-	if(!obstacle)
+	if(!obstacle || !src.brain)
 		return
 
 	if(resolve_weakref(src.brain.GetMemoryValue(MEM_OBSTRUCTION("WAYPOINT"), null)) == obstacle)

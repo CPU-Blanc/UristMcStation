@@ -73,7 +73,7 @@
 
 /datum/goai/mob_commander/proc/HandleWindoorOpen(var/datum/ActionTracker/tracker, var/obj/machinery/door/window/WD)
 	var/mob/mob_pawn = src.GetPawn()
-	if (!mob_pawn || !istype(mob_pawn))
+	if (!mob_pawn || !istype(mob_pawn) || !src.brain)
 		return
 
 	if (!tracker)
@@ -108,14 +108,16 @@
 			return
 
 	else
-		//Todo: Check dir and step + 1 towards waypoint where applicable
+		var/turf/pawn_turf = get_turf(mob_pawn)
 		var/turf/windoor_turf = get_turf(WD)
-		var/dist_to_windoor = ChebyshevDistance(get_turf(mob_pawn), windoor_turf)
-		if(dist_to_windoor < 1)
+		var/turf/end_turf = WD.dir & get_dir(pawn_turf, windoor_turf) ? get_step(WD, WD.dir) : windoor_turf
+
+		var/dist_to_target = ChebyshevDistance(pawn_turf, end_turf)
+		if(dist_to_target < 1)
 			if(tracker.IsRunning())
 				DropObstacleMemory(WD)
 				tracker.SetDone()
 				WD.attack_hand(mob_pawn)	//Windoors don't auto-close. Let's be polite and close it after us
 		else if(!tracker.BBGet("entering_door", FALSE))
-			StartNavigateTo(windoor_turf, 0)
+			StartNavigateTo(end_turf, 0)
 			tracker.BBSet("entering_door", TRUE)

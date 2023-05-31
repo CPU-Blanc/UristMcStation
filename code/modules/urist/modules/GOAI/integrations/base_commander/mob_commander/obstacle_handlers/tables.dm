@@ -78,7 +78,7 @@
 
 /datum/goai/mob_commander/proc/HandleTableFlip(var/datum/ActionTracker/tracker, var/obj/structure/table/table, var/flip = FALSE)
 	var/mob/mob_pawn = src.GetPawn()
-	if(!mob_pawn || !istype(mob_pawn))
+	if(!mob_pawn || !istype(mob_pawn) || !src.brain)
 		tracker.SetFailed()
 		return
 
@@ -88,7 +88,7 @@
 		tracker.SetDone()
 		return
 
-	if(table in src.brain.perceptions[SENSE_SIGHT_CURR])
+	if(table in src.brain.perceptions?[SENSE_SIGHT_CURR])
 		if(table.flipped == flip)
 			tracker.SetDone()
 			return
